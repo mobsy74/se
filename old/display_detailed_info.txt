@@ -1,0 +1,21 @@
+//Display detailed info & custom name
+bool firstWrite=true;
+public void print(string message){
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName("Script Output Screen") as IMyTextPanel;
+	if (firstWrite){
+		firstWrite=false;
+		screen.WritePublicText("");
+	}
+	screen.WritePublicText(message + "\n",true);  
+}  
+
+void Main() 
+{
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+	GridTerminalSystem.GetBlocksOfType<IMySolarPanel>(blocks);
+	for (int i=0; i < blocks.Count; i++){
+		var output = "Name: " + blocks[i].CustomName + "\n";
+		output = output + "DetailedInfo: " + blocks[i].DetailedInfo + "\n";
+		print(output);
+	}
+}

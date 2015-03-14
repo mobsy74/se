@@ -1,0 +1,10 @@
+//Turn on the dampeners if they are off
+
+void Main()
+{  
+	clearOutputScreen(outputScreen);
+	IMyCockpit controller = GridTerminalSystem.GetBlockWithName("Flight Seat: Upper Cockpit") as IMyCockpit;
+	if (!controller.DampenersOverride){
+		controller.GetActionWithName("DampenersOverride").Apply(controller);
+	}
+}

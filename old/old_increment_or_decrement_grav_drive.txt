@@ -1,0 +1,156 @@
+//======================================================
+//Old version with screenBuffer memory - not working
+//Increment or decrement Grav Drive generators by one tick
+ 
+static string memoryBufferNumber="3";
+static string debugScreen="Script Output Screen";
+static char delimiter='@';
+static string increaseAction="IncreaseGravity"; 
+static string decreaseAction="DecreaseGravity";
+static float lowerGravityLimit=-1; 
+static float upperGravityLimit=1; 
+string warningMessage = "\n" +
+			"This screen is being used as a memory buffer \n" + 
+			"for Programmable Block scriptInput" + memoryBufferNumber + ".\n" +
+			"Please do not change it's public text.";
+
+public void clearDebugScreen(){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(debugScreen) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void debug(string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(debugScreen) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+public float getcurrentGravity(List<IMyTerminalBlock> blocks){
+	float gravity = 0;
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			gravity = currentBlock.Gravity;
+			break;
+		}   
+	}
+	return gravity;
+}
+
+public bool checkGravities(List<IMyTerminalBlock> blocks){
+	bool firstTime=true;
+	bool aligned=true;
+	float benchmarkGravity=0;
+
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {   
+			if (firstTime) {
+				firstTime=false;
+				benchmarkGravity=currentBlock.Gravity;
+			}else{
+				if (benchmarkGravity != currentBlock.Gravity){
+					aligned=false;
+					break;
+				}
+			}
+		}   
+	}
+	return aligned;
+}
+
+public void setGravToTarget(List<IMyTerminalBlock> blocks, float targetGravity){
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			if (currentBlock.Gravity < targetGravity){
+				currentBlock.GetActionWithName(increaseAction).Apply(currentBlock);
+			}else if (currentBlock.Gravity > targetGravity){
+				currentBlock.GetActionWithName(decreaseAction).Apply(currentBlock);
+			}
+		}   
+	}
+}
+
+public string getLastAction(float currentGravity){
+	string lastAction = "";
+	IMyTextPanel buffer = GridTerminalSystem.GetBlockWithName("scriptBuffer" + memoryBufferNumber) as IMyTextPanel; 
+	string memoryBuffer=buffer.GetPublicText();
+
+	//debug("memoryBuffer: " + memoryBuffer);
+
+	string[] splits = memoryBuffer.Split(delimiter);
+	if (splits.Length > 1) {
+		//debug("Splits length > 1");
+		lastAction = splits[0];
+	}
+
+	if( lastAction == "" ){
+		if (currentGravity >= 0){
+			return increaseAction;
+		}else{
+			return decreaseAction;
+		}
+	}else{
+		return lastAction;
+	}   
+}
+
+public float getTargetGravity(string lastAction, float currentGravity){ 
+	if( lastAction == decreaseAction ){
+		if (currentGravity == lowerGravityLimit){
+debug("1");
+			//saveAction(increaseAction);
+			return upperGravityLimit;
+		}else{
+debug("2");
+			//saveAction(decreaseAction);
+			return lowerGravityLimit;
+		}
+	}else{
+		if (currentGravity == upperGravityLimit){
+debug("3");
+			//saveAction(decreaseAction);
+			return lowerGravityLimit;
+		}else{
+debug("4");
+			//saveAction(increaseAction);
+			return upperGravityLimit;
+		}
+	}
+}
+
+public void saveAction(string action){ 
+	IMyTextPanel buffer = GridTerminalSystem.GetBlockWithName("scriptBuffer" + memoryBufferNumber) as IMyTextPanel; 
+	buffer.WritePublicText(action + delimiter + "\n"); 
+	buffer.WritePublicText(warningMessage,true);  
+}
+  
+void Main()    
+{
+	clearDebugScreen();
+	bool gravitiesAligned=true;
+	float currentGravity=0;
+	float targetGravity = 0;
+
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks);
+
+	gravitiesAligned=checkGravities(blocks);
+	debug("gravitiesAligned: " + gravitiesAligned.ToString());
+
+	if (!gravitiesAligned){
+		targetGravity=1;
+		setGravToTarget(blocks, targetGravity);
+	}else{
+		currentGravity = getcurrentGravity(blocks);
+		debug("currentGravity: " + currentGravity);
+		string lastAction = getLastAction(currentGravity);
+		debug("lastAction: " + lastAction);
+		targetGravity = getTargetGravity(lastAction, currentGravity);
+		debug("targetGravity: " + targetGravity);
+		setGravToTarget(blocks, targetGravity);
+	}
+}

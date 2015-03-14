@@ -1,0 +1,158 @@
+//Increment or decrement Grav Drive generators by one tick
+ 
+static string outputScreen="Script Output Screen";
+static string bufferScreen="Buffer: Grav Drive Last Action";
+static string timerBlockName="Timer: Grav Drive Increment Direction";
+static string gravInfoBlockName="Script: Update Grav Drive Direction Info";
+static string increaseAction="IncreaseGravity"; 
+static string decreaseAction="DecreaseGravity";
+static float lowerGravityLimit=-1; 
+static float upperGravityLimit=1; 
+
+public void clearOutputScreen(string screenName){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void print(string screenName, string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+public float getcurrentGravity(List<IMyTerminalBlock> blocks){
+	float gravity = 0;
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			gravity = currentBlock.Gravity;
+			break;
+		}   
+	}
+	return gravity;
+}
+
+public bool checkGravities(List<IMyTerminalBlock> blocks){
+	bool firstTime=true;
+	bool aligned=true;
+	float benchmarkGravity=0;
+
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {   
+			if (firstTime) {
+				firstTime=false;
+				benchmarkGravity=currentBlock.Gravity;
+			}else{
+				if (benchmarkGravity != currentBlock.Gravity){
+					aligned=false;
+					break;
+				}
+			}
+		}   
+	}
+	return aligned;
+}
+
+public string getLastAction(float currentGravity){
+	string lastAction = Storage;
+
+	if( lastAction == "" ){
+		if (currentGravity >= 0){
+			return increaseAction;
+		}else{
+			return decreaseAction;
+		}
+	}else{
+		return lastAction;
+	}   
+}
+
+public float getTargetGravity(string lastAction, float currentGravity){ 
+	if( lastAction == decreaseAction ){
+		if (currentGravity == lowerGravityLimit){
+			saveLastAction(increaseAction);
+			return upperGravityLimit;
+		}else{
+			saveLastAction(decreaseAction);
+			return lowerGravityLimit;
+		}
+	}else{
+		if (currentGravity == upperGravityLimit){
+			saveLastAction(decreaseAction);
+			return lowerGravityLimit;
+		}else{
+			saveLastAction(increaseAction);
+			return upperGravityLimit;
+		}
+	}
+}
+
+public void saveLastAction(string lastAction){
+	Storage=lastAction;
+	clearOutputScreen(bufferScreen);
+	print(bufferScreen,lastAction);
+}
+
+public void setGravToTarget(List<IMyTerminalBlock> blocks, float targetGravity){
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			if (currentBlock.Gravity < targetGravity){
+				currentBlock.GetActionWithName(increaseAction).Apply(currentBlock);
+			}else if (currentBlock.Gravity > targetGravity){
+				currentBlock.GetActionWithName(decreaseAction).Apply(currentBlock);
+			}
+		}   
+	}
+}
+
+public float getNextGravity(float currentGravity, float targetGravity){
+	float nextGravity = 0;
+	if (currentGravity > targetGravity){
+		nextGravity = currentGravity - (float)0.2;
+		if (nextGravity < lowerGravityLimit){
+			nextGravity = lowerGravityLimit;
+		}
+	}else{
+		nextGravity = currentGravity + (float)0.2;
+		if (nextGravity > upperGravityLimit){
+			nextGravity = upperGravityLimit;
+		}
+	}
+	return nextGravity;
+}
+
+void Main()    
+{
+	clearOutputScreen(outputScreen);
+	bool gravitiesAligned=true;
+	float currentGravity=0;
+	float targetGravity=0;
+	float nextGravity=0;
+
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks);
+
+	gravitiesAligned=checkGravities(blocks);
+
+	if (!gravitiesAligned){
+		targetGravity=1;
+		setGravToTarget(blocks, targetGravity);
+	}else{
+		currentGravity = getcurrentGravity(blocks);
+		string lastAction = getLastAction(currentGravity);
+		targetGravity = getTargetGravity(lastAction, currentGravity);
+		setGravToTarget(blocks, targetGravity);
+		nextGravity = getNextGravity(currentGravity, targetGravity);
+		if (nextGravity == targetGravity){
+			//turn off timer block
+			IMyTimerBlock timer = GridTerminalSystem.GetBlockWithName(timerBlockName) as IMyTimerBlock;
+			timer.GetActionWithName("OnOff_Off").Apply(timer);
+			IMyProgrammableBlock scriptBlock = GridTerminalSystem.GetBlockWithName(gravInfoBlockName) as IMyProgrammableBlock;
+			scriptBlock.GetActionWithName("Run").Apply(scriptBlock);			
+		}
+	}
+}

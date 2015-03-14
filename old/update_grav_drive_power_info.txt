@@ -1,0 +1,55 @@
+//Update Grav Drive screens and lights with drive power information
+
+static string[] outputScreens= { "LCD Panel: Upper Cockpit: Grav Drives", "LCD Panel: Lower Cockpit: Grav Drives" }; 
+static string lightsGroup="Cockpit Lights";
+
+public void clearOutputScreens(string[] screenNames){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(""); 		
+	}
+}
+
+public void print(string[] screenNames, string message){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(message + "\n",true); 		
+	}
+}
+
+public bool getGravDrivePower(){
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks);
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			return currentBlock.Enabled;
+			break;
+		}   
+	}
+}
+
+public void setLightsBlink(Color lightColor){
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == lightsGroup){
+			List<IMyTerminalBlock> lights = groups[i].Blocks;
+			for (int j=0; j < lights.Count; j++){
+				IMyInteriorLight light = lights[j] as IMyInteriorLight;
+				light.SetValue("Color",lightColor);
+			}
+		}
+	}
+}
+
+void Main()
+{
+	clearOutputScreens(outputScreens);
+	bool powered = getGravDrivePower();
+	if (powered){
+		print(outputScreens, "Grav Drive Power: ON");
+	}else{
+		print(outputScreens, "Grav Drive Power: OFF");
+	}
+}

@@ -1,0 +1,65 @@
+//Update Grav Drive screens and lights with direction information
+
+static string[] outputScreens= { "LCD Panel: Upper Cockpit: Grav Drives", "LCD Panel: Lower Cockpit: Grav Drives" }; 
+static string lightsGroup="Cockpit Lights";
+static string bufferScreenName="Buffer: Grav Drive Last Action";
+static string increaseAction="IncreaseGravity\n"; 
+static string decreaseAction="DecreaseGravity\n";
+static string reverseDirection="REVERSE";
+static string forwardDirection="FORWARD";
+static Color reverseColor=new Color(255,0,0);  //red
+static Color forwardColor=new Color(0,255,0);  //green
+
+public void clearOutputScreens(string[] screenNames){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(""); 		
+	}
+}
+
+public void print(string[] screenNames, string message){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(message + "\n",true); 		
+	}
+}
+
+public string getGravDriveDirection(){
+	IMyTextPanel bufferScreen = GridTerminalSystem.GetBlockWithName(bufferScreenName) as IMyTextPanel; 
+	string bufferText=bufferScreen.GetPublicText();
+	if (bufferText == increaseAction){
+		return forwardDirection;
+	}else{
+		return reverseDirection;
+	}
+}
+
+public Color getLightColor(string gravDriveDirection){
+	if (gravDriveDirection == reverseDirection){
+		return reverseColor;
+	}else{
+		return forwardColor;
+	}
+}
+
+public void setLightsColor(Color lightColor){
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == lightsGroup){
+			List<IMyTerminalBlock> lights = groups[i].Blocks;
+			for (int j=0; j < lights.Count; j++){
+				IMyInteriorLight light = lights[j] as IMyInteriorLight;
+				light.SetValue("Color",lightColor);
+			}
+		}
+	}
+}
+
+void Main()
+{  
+	string gravDriveDirection=getGravDriveDirection();
+	Color lightColor = getLightColor(gravDriveDirection);
+	setLightsColor(lightColor);
+	clearOutputScreens(outputScreens);
+	print(outputScreens, "Grav Drive Direction: " + gravDriveDirection);
+}

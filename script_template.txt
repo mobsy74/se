@@ -1,0 +1,33 @@
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Script Template
+
+static string[] outputScreens= { "Script Output Screen" }; 
+
+public void clearOutputScreen(string screenName){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.WritePublicText("");  
+} 
+ 
+public void print(string screenName, string message){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.WritePublicText(message + "\n",true);    
+}
+
+void Main()
+{
+	clearOutputScreens(outputScreens);
+
+}
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================

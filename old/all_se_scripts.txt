@@ -1,0 +1,1094 @@
+//Turn on the dampeners if they are off and toggle battery recharge
+
+static string controllerName="Flight Seat: Upper Cockpit";
+static string batteryGroup="Batteries: Borealis";
+
+public void toggleBatteries(){
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == batteryGroup){
+			List<IMyTerminalBlock> batteries = groups[i].Blocks;
+			for (int j=0; j < batteries.Count; j++){
+				IMyBatteryBlock battery = batteries[j] as IMyBatteryBlock;
+				battery.GetActionWithName("Recharge").Apply(battery);
+			}
+		}
+	}
+}
+
+void Main()
+{  
+	IMyCockpit controller = GridTerminalSystem.GetBlockWithName(controllerName) as IMyCockpit;
+	if (!controller.DampenersOverride){
+		controller.GetActionWithName("DampenersOverride").Apply(controller);
+	}
+	toggleBatteries();
+}
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Display Info for Upper Cockpit LCD
+
+static string outputScreen="LCD Panel: Upper Cockpit: Info"; 
+
+public void clearOutputScreen(string screenName){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void print(string screenName, string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+//Calculate max power output from solar panels on main ship
+void Main()   
+{
+	clearOutputScreen(outputScreen);
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMySolarPanel>(blocks);  
+	int totalPanels = 0;  
+	for (int i=0; i < blocks.Count; i++){  
+		string[] splits = blocks[i].CustomName.Split(':');  
+  
+		//If there is no : in the name (eg: Solar Panel: Skiff)  
+		if (splits.Length == 1) {  
+			totalPanels++;  
+		}  
+	}  
+	double totalPower = Math.Round((((double)totalPanels * 120)/1000),2);
+
+	//print(outputScreen, totalPanels.ToString() + " Solar Panels | " + String.Format("{0:F2}", totalPower) + "MW max power");
+
+	print(outputScreen, " " + String.Format("{0:F2}", totalPower) + "MW power output at full sail");
+	print(outputScreen, " 1) Toggle Grav Drive power");
+	print(outputScreen, " 2) Toggle Grav Drive direction");
+	print(outputScreen, " 3) EMERGENCY BREAKING");
+	print(outputScreen, " 4) Toggle Battery Recharge");
+	print(outputScreen, " 5) Toggle Driller Dampeners");
+	print(outputScreen, " 7) Update Upper Info Screen");
+	print(outputScreen, " 8) Toggle Antenna");
+	print(outputScreen, " 9) Toggle Reactors");
+}
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Grav Drive toggle direction script 
+ 
+static string upperOutputScreen="LCD Panel: Upper Cockpit: Grav Drives";  
+static string lowerOutputScreen="LCD Panel: Lower Cockpit: Grav Drives";  
+static float lowerGravityLimit=-1;  
+static float upperGravityLimit=1; 
+static string lightsGroup="Cockpit Lights"; 
+static string reverseDirection="REVERSE"; 
+static string reverseMessage="  Grav Drive Direction: " + reverseDirection; 
+static string forwardDirection="FORWARD"; 
+static string forwardMessage="  Grav Drive Direction: " + forwardDirection;
+static string directionMessageType="DIRECTION"; 
+static string powerOn="ON"; 
+static string powerOnMessage="  Grav Drive Power: " + powerOn; 
+static string powerOff="OFF"; 
+static string powerOffMessage="  Grav Drive Power: " + powerOff; 
+static string powerMessageType="POWER"; 
+static string undetermined="???"; 
+static string undeterminedDirectionMessage="  Grav Drive Direction: " + undetermined;
+static string undeterminedPowerMessage="  Grav Drive Power: " + undetermined;
+static Color reverseColor=new Color(255,0,0);  //red 
+static Color forwardColor=new Color(0,255,0);  //green 
+ 
+public void clearOutputScreen(string screenName){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.WritePublicText("");  
+} 
+ 
+public void print(string screenName, string message){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.WritePublicText(message + "\n",true);    
+} 
+ 
+public string getNewScreenMessage(string screenName, string messageType, string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	string oldMessage = screen.GetPublicText();
+
+	if (!oldMessage.Contains("\n")){
+		oldMessage = undeterminedPowerMessage + "\n" + undeterminedDirectionMessage;
+	}
+
+	string[] splits = oldMessage.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None); 
+	int messageToChange = 0; 
+	if (messageType == directionMessageType) { 
+		messageToChange = 1;  
+	}else{ 
+		messageToChange = 0; 
+	} 
+ 
+	splits[messageToChange] = message; 
+	string message1 = ""; 
+	string message2 = ""; 
+	message1 = splits[0]; 
+	message2 = splits[1]; 
+		 
+	string newMessage = message1 + "\n" + message2; 
+	string newScreenMessage = newMessage + "\n\n\n\n\n\n\n\n\n\n" + newMessage; 
+	return newScreenMessage; 
+} 
+ 
+public void setScreenFontColor(string screenName, Color screenColor){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.SetValue("FontColor",screenColor); 
+} 
+ 
+public float getcurrentGravity(List<IMyTerminalBlock> blocks){ 
+	float gravity = 0; 
+	for (int i=0; i < blocks.Count; i++){ 
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i]; 
+		string[] splits = currentBlock.CustomName.Split(':');    
+		if (splits[0] == "Grav Drive") { 
+			gravity = currentBlock.Gravity; 
+			break; 
+		}    
+	} 
+	return gravity; 
+} 
+ 
+public string getNewGravDriveDirection(float currentGravity){ 
+ 
+	if (currentGravity < upperGravityLimit){ 
+		setLightsAndScreenColor(forwardColor); 
+		string newMessage = getNewScreenMessage(upperOutputScreen, directionMessageType, forwardMessage); 
+		clearOutputScreen(upperOutputScreen); 
+		clearOutputScreen(lowerOutputScreen); 
+		print(upperOutputScreen, newMessage); 
+		print(lowerOutputScreen, newMessage); 
+		return forwardDirection; 
+	}else{ 
+		setLightsAndScreenColor(reverseColor); 
+		string newMessage = getNewScreenMessage(upperOutputScreen, directionMessageType, reverseMessage); 
+		clearOutputScreen(upperOutputScreen); 
+		clearOutputScreen(lowerOutputScreen); 
+		print(upperOutputScreen, newMessage); 
+		print(lowerOutputScreen, newMessage); 
+		return reverseDirection; 
+	} 
+} 
+ 
+public void setLightsAndScreenColor(Color newColor){ 
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups; 
+	for (int i=0; i < groups.Count; i++){ 
+		if (groups[i].Name == lightsGroup){ 
+			List<IMyTerminalBlock> lights = groups[i].Blocks; 
+			for (int j=0; j < lights.Count; j++){ 
+				IMyInteriorLight light = lights[j] as IMyInteriorLight; 
+				light.SetValue("Color",newColor); 
+			} 
+		} 
+	} 
+	setScreenFontColor(upperOutputScreen, newColor); 
+	setScreenFontColor(lowerOutputScreen, newColor); 
+} 
+ 
+void Main() 
+{ 
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();   
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks); 
+	float currentGravity = getcurrentGravity(blocks); 
+	string newGravDriveDirection = getNewGravDriveDirection(currentGravity); 
+	for (int i=0; i < blocks.Count; i++){ 
+		IMyGravityGenerator gravGen = (IMyGravityGenerator)blocks[i]; 
+		string[] splits = gravGen.CustomName.Split(':');    
+		if (splits[0] == "Grav Drive") { 
+			if (newGravDriveDirection == forwardDirection){ 
+				gravGen.SetValueFloat("Gravity",upperGravityLimit); 
+			}else{ 
+				gravGen.SetValueFloat("Gravity",lowerGravityLimit); 
+			} 
+		}    
+	} 
+} 
+
+
+
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Grav Drive toggle power script
+
+static string upperOutputScreen="LCD Panel: Upper Cockpit: Grav Drives"; 
+static string lowerOutputScreen="LCD Panel: Lower Cockpit: Grav Drives";
+static string controllerName="Flight Seat: Upper Cockpit"; 
+static float lowerGravityLimit=-1; 
+static float upperGravityLimit=1;
+static string lightsGroup="Cockpit Lights";
+static string gravDriveGroup="Grav Drive";
+static string reverseDirection="REVERSE";
+static string reverseMessage="  Grav Drive Direction: " + reverseDirection;
+static string forwardDirection="FORWARD";
+static string forwardMessage="  Grav Drive Direction: " + forwardDirection;
+static string directionMessageType="DIRECTION";
+static string powerOn="ON";
+static string powerOnMessage="  Grav Drive Power: " + powerOn;
+static string powerOff="OFF";
+static string powerOffMessage="  Grav Drive Power: " + powerOff;
+static string powerMessageType="POWER";
+static string undetermined="???"; 
+static string undeterminedDirectionMessage="  Grav Drive Direction: " + undetermined;
+static string undeterminedPowerMessage="  Grav Drive Power: " + undetermined;
+static Color reverseColor=new Color(255,0,0);  //red
+static Color forwardColor=new Color(0,255,0);  //green
+
+public void clearOutputScreen(string screenName){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void print(string screenName, string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+public string getNewScreenMessage(string screenName, string messageType, string message){
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	string oldMessage = screen.GetPublicText();
+
+	if (!oldMessage.Contains("\n")){
+		oldMessage = undeterminedPowerMessage + "\n" + undeterminedDirectionMessage;
+	}
+
+	string[] splits = oldMessage.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
+	int messageToChange = 0;
+	if (messageType == directionMessageType) {
+		messageToChange = 1; 
+	}else{
+		messageToChange = 0;
+	}
+
+	splits[messageToChange] = message;
+	string message1 = "";
+	string message2 = "";
+	message1 = splits[0];
+	message2 = splits[1];
+		
+	string newMessage = message1 + "\n" + message2;
+	string newScreenMessage = newMessage + "\n\n\n\n\n\n\n\n\n\n" + newMessage; 
+	return newScreenMessage;
+}
+
+public bool getCurrentPower(List<IMyTerminalBlock> gravDriveComponents){
+	bool powered = false;
+	for (int i=0; i < gravDriveComponents.Count; i++){
+		IMyFunctionalBlock component = gravDriveComponents[i] as IMyFunctionalBlock;
+		powered = component.Enabled;
+		break;
+	}
+	return powered;
+}
+
+public void toggleLights(bool powered){
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == lightsGroup){
+			List<IMyTerminalBlock> lights = groups[i].Blocks;
+			for (int j=0; j < lights.Count; j++){
+				IMyInteriorLight light = lights[j] as IMyInteriorLight;
+				if (powered){
+					light.SetValueFloat("Blink Lenght",0);
+					light.SetValueFloat("Blink Interval",0);
+					light.GetActionWithName("OnOff_Off").Apply(light);
+					string newMessage = getNewScreenMessage(upperOutputScreen, powerMessageType, powerOffMessage);
+					clearOutputScreen(upperOutputScreen);
+					clearOutputScreen(lowerOutputScreen);
+					print(upperOutputScreen, newMessage);
+					print(lowerOutputScreen, newMessage);
+				}else{
+					light.SetValueFloat("Blink Lenght",50);
+					light.SetValueFloat("Blink Interval",(float)1.25);
+					light.GetActionWithName("OnOff_On").Apply(light);
+					string newMessage = getNewScreenMessage(upperOutputScreen, powerMessageType, powerOnMessage);
+					clearOutputScreen(upperOutputScreen);
+					clearOutputScreen(lowerOutputScreen);
+					print(upperOutputScreen, newMessage);
+					print(lowerOutputScreen, newMessage);
+				}
+			}
+		}
+	}
+}
+
+public void toggleGravDrivePower(List<IMyTerminalBlock> gravDriveComponents, bool powered){
+	for (int i=0; i < gravDriveComponents.Count; i++){
+		IMyFunctionalBlock component = gravDriveComponents[i] as IMyFunctionalBlock;
+		if (powered){
+			component.GetActionWithName("OnOff_Off").Apply(component);
+		}else{
+			component.GetActionWithName("OnOff_On").Apply(component);
+			IMyCockpit controller = GridTerminalSystem.GetBlockWithName(controllerName) as IMyCockpit;
+			//Turn off the dampeners if they are on
+			if (controller.DampenersOverride){
+				controller.GetActionWithName("DampenersOverride").Apply(controller);
+			}
+		}
+	}
+}
+
+void Main()
+{
+	//clearOutputScreen(upperOutputScreen);
+	//clearOutputScreen(lowerOutputScreen);
+	List<IMyTerminalBlock> gravDriveComponents = null;
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == gravDriveGroup){
+			gravDriveComponents = groups[i].Blocks;
+			break;
+		}
+	}
+	bool powered = getCurrentPower(gravDriveComponents);
+	toggleLights(powered);
+	toggleGravDrivePower(gravDriveComponents, powered);	
+}
+
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Script Template
+
+static string[] outputScreens= { "Script Output Screen" }; 
+
+public void clearOutputScreens(string[] screenNames){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(""); 		
+	}
+}
+
+public void print(string[] screenNames, string message){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(message + "\n",true); 		
+	}
+}
+
+void Main()
+{
+	clearOutputScreens(outputScreens);
+
+}
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+
+
+
+
+
+
+//Turn on the dampeners if they are off
+
+static string outputScreen="Script Output Screen"; 
+
+public void clearOutputScreen(string screenName){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void print(string screenName, string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+void Main()
+{  
+	clearOutputScreen(outputScreen);
+	IMyCockpit controller = GridTerminalSystem.GetBlockWithName("Flight Seat: Upper Cockpit") as IMyCockpit;
+
+	string output = "";
+	if (!controller.DampenersOverride){
+		controller.GetActionWithName("DampenersOverride").Apply(controller);
+		//print(outputScreen, "Dampeners have been turned on");
+	}else{
+		//print(outputScreen, "Dampeners were already on");
+	}
+}
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Increment or decrement Grav Drive generators by one tick
+ 
+static string outputScreen="Script Output Screen";
+static string bufferScreen="Buffer: Grav Drive Last Action";
+static string timerBlockName="Timer: Grav Drive Increment Direction";
+static string gravInfoBlockName="Script: Update Grav Drive Direction Info";
+static string increaseAction="IncreaseGravity"; 
+static string decreaseAction="DecreaseGravity";
+static float lowerGravityLimit=-1; 
+static float upperGravityLimit=1; 
+
+public void clearOutputScreen(string screenName){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void print(string screenName, string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+public float getcurrentGravity(List<IMyTerminalBlock> blocks){
+	float gravity = 0;
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			gravity = currentBlock.Gravity;
+			break;
+		}   
+	}
+	return gravity;
+}
+
+public bool checkGravities(List<IMyTerminalBlock> blocks){
+	bool firstTime=true;
+	bool aligned=true;
+	float benchmarkGravity=0;
+
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {   
+			if (firstTime) {
+				firstTime=false;
+				benchmarkGravity=currentBlock.Gravity;
+			}else{
+				if (benchmarkGravity != currentBlock.Gravity){
+					aligned=false;
+					break;
+				}
+			}
+		}   
+	}
+	return aligned;
+}
+
+public string getLastAction(float currentGravity){
+	string lastAction = Storage;
+
+	if( lastAction == "" ){
+		if (currentGravity >= 0){
+			return increaseAction;
+		}else{
+			return decreaseAction;
+		}
+	}else{
+		return lastAction;
+	}   
+}
+
+public float getTargetGravity(string lastAction, float currentGravity){ 
+	if( lastAction == decreaseAction ){
+		if (currentGravity == lowerGravityLimit){
+			saveLastAction(increaseAction);
+			return upperGravityLimit;
+		}else{
+			saveLastAction(decreaseAction);
+			return lowerGravityLimit;
+		}
+	}else{
+		if (currentGravity == upperGravityLimit){
+			saveLastAction(decreaseAction);
+			return lowerGravityLimit;
+		}else{
+			saveLastAction(increaseAction);
+			return upperGravityLimit;
+		}
+	}
+}
+
+public void saveLastAction(string lastAction){
+	Storage=lastAction;
+	clearOutputScreen(bufferScreen);
+	print(bufferScreen,lastAction);
+}
+
+public void setGravToTarget(List<IMyTerminalBlock> blocks, float targetGravity){
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			if (currentBlock.Gravity < targetGravity){
+				currentBlock.GetActionWithName(increaseAction).Apply(currentBlock);
+			}else if (currentBlock.Gravity > targetGravity){
+				currentBlock.GetActionWithName(decreaseAction).Apply(currentBlock);
+			}
+		}   
+	}
+}
+
+public float getNextGravity(float currentGravity, float targetGravity){
+	float nextGravity = 0;
+	if (currentGravity > targetGravity){
+		nextGravity = currentGravity - (float)0.2;
+		if (nextGravity < lowerGravityLimit){
+			nextGravity = lowerGravityLimit;
+		}
+	}else{
+		nextGravity = currentGravity + (float)0.2;
+		if (nextGravity > upperGravityLimit){
+			nextGravity = upperGravityLimit;
+		}
+	}
+	return nextGravity;
+}
+
+void Main()    
+{
+	clearOutputScreen(outputScreen);
+	bool gravitiesAligned=true;
+	float currentGravity=0;
+	float targetGravity=0;
+	float nextGravity=0;
+
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks);
+
+	gravitiesAligned=checkGravities(blocks);
+
+	if (!gravitiesAligned){
+		targetGravity=1;
+		setGravToTarget(blocks, targetGravity);
+	}else{
+		currentGravity = getcurrentGravity(blocks);
+		string lastAction = getLastAction(currentGravity);
+		targetGravity = getTargetGravity(lastAction, currentGravity);
+		setGravToTarget(blocks, targetGravity);
+		nextGravity = getNextGravity(currentGravity, targetGravity);
+		if (nextGravity == targetGravity){
+			//turn off timer block
+			IMyTimerBlock timer = GridTerminalSystem.GetBlockWithName(timerBlockName) as IMyTimerBlock;
+			timer.GetActionWithName("OnOff_Off").Apply(timer);
+			IMyProgrammableBlock scriptBlock = GridTerminalSystem.GetBlockWithName(gravInfoBlockName) as IMyProgrammableBlock;
+			scriptBlock.GetActionWithName("Run").Apply(scriptBlock);			
+		}
+	}
+}
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Update Grav Drive screens and lights with direction information
+
+static string[] outputScreens= { "LCD Panel: Upper Cockpit: Grav Drives", "LCD Panel: Lower Cockpit: Grav Drives" }; 
+static string lightsGroup="Cockpit Lights";
+static string bufferScreenName="Buffer: Grav Drive Last Action";
+static string increaseAction="IncreaseGravity\n"; 
+static string decreaseAction="DecreaseGravity\n";
+static string reverseDirection="REVERSE";
+static string forwardDirection="FORWARD";
+static Color reverseColor=new Color(255,0,0);  //red
+static Color forwardColor=new Color(0,255,0);  //green
+
+public void clearOutputScreens(string[] screenNames){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(""); 		
+	}
+}
+
+public void print(string[] screenNames, string message){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(message + "\n",true); 		
+	}
+}
+
+public string getGravDriveDirection(){
+	IMyTextPanel bufferScreen = GridTerminalSystem.GetBlockWithName(bufferScreenName) as IMyTextPanel; 
+	string bufferText=bufferScreen.GetPublicText();
+	if (bufferText == increaseAction){
+		return forwardDirection;
+	}else{
+		return reverseDirection;
+	}
+}
+
+public Color getLightColor(string gravDriveDirection){
+	if (gravDriveDirection == reverseDirection){
+		return reverseColor;
+	}else{
+		return forwardColor;
+	}
+}
+
+public void setLightsColor(Color lightColor){
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == lightsGroup){
+			List<IMyTerminalBlock> lights = groups[i].Blocks;
+			for (int j=0; j < lights.Count; j++){
+				IMyInteriorLight light = lights[j] as IMyInteriorLight;
+				light.SetValue("Color",lightColor);
+			}
+		}
+	}
+}
+
+void Main()
+{  
+	string gravDriveDirection=getGravDriveDirection();
+	Color lightColor = getLightColor(gravDriveDirection);
+	setLightsColor(lightColor);
+	clearOutputScreens(outputScreens);
+	print(outputScreens, "Grav Drive Direction: " + gravDriveDirection);
+}
+
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+//Update Grav Drive screens and lights with drive power information
+
+static string[] outputScreens= { "LCD Panel: Upper Cockpit: Grav Drives", "LCD Panel: Lower Cockpit: Grav Drives" }; 
+static string lightsGroup="Cockpit Lights";
+
+public void clearOutputScreens(string[] screenNames){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(""); 		
+	}
+}
+
+public void print(string[] screenNames, string message){
+	for (int i=1; i < screenNames.Length; i++){
+		IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenNames[i]) as IMyTextPanel; 
+		screen.WritePublicText(message + "\n",true); 		
+	}
+}
+
+public bool getGravDrivePower(){
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks);
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			return currentBlock.Enabled;
+			break;
+		}   
+	}
+}
+
+public void setLightsBlink(Color lightColor){
+	List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+	for (int i=0; i < groups.Count; i++){
+		if (groups[i].Name == lightsGroup){
+			List<IMyTerminalBlock> lights = groups[i].Blocks;
+			for (int j=0; j < lights.Count; j++){
+				IMyInteriorLight light = lights[j] as IMyInteriorLight;
+				light.SetValue("Color",lightColor);
+			}
+		}
+	}
+}
+
+void Main()
+{
+	clearOutputScreens(outputScreens);
+	bool powered = getGravDrivePower();
+	if (powered){
+		print(outputScreens, "Grav Drive Power: ON");
+	}else{
+		print(outputScreens, "Grav Drive Power: OFF");
+	}
+}
+
+
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+
+//Display detailed info & custom name
+bool firstWrite=true;
+public void print(string message){
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName("Script Output Screen") as IMyTextPanel;
+	if (firstWrite){
+		firstWrite=false;
+		screen.WritePublicText("");
+	}
+	screen.WritePublicText(message + "\n",true);  
+}  
+
+void Main() 
+{
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+	GridTerminalSystem.GetBlocksOfType<IMySolarPanel>(blocks);
+	for (int i=0; i < blocks.Count; i++){
+		var output = "Name: " + blocks[i].CustomName + "\n";
+		output = output + "DetailedInfo: " + blocks[i].DetailedInfo + "\n";
+		print(output);
+	}
+}
+
+
+//======================================================
+//Old version with screenBuffer memory - not working
+//Increment or decrement Grav Drive generators by one tick
+ 
+static string memoryBufferNumber="3";
+static string debugScreen="Script Output Screen";
+static char delimiter='@';
+static string increaseAction="IncreaseGravity"; 
+static string decreaseAction="DecreaseGravity";
+static float lowerGravityLimit=-1; 
+static float upperGravityLimit=1; 
+string warningMessage = "\n" +
+			"This screen is being used as a memory buffer \n" + 
+			"for Programmable Block scriptInput" + memoryBufferNumber + ".\n" +
+			"Please do not change it's public text.";
+
+public void clearDebugScreen(){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(debugScreen) as IMyTextPanel; 
+	screen.WritePublicText(""); 
+}
+
+public void debug(string message){ 
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(debugScreen) as IMyTextPanel; 
+	screen.WritePublicText(message + "\n",true);   
+}
+
+public float getcurrentGravity(List<IMyTerminalBlock> blocks){
+	float gravity = 0;
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			gravity = currentBlock.Gravity;
+			break;
+		}   
+	}
+	return gravity;
+}
+
+public bool checkGravities(List<IMyTerminalBlock> blocks){
+	bool firstTime=true;
+	bool aligned=true;
+	float benchmarkGravity=0;
+
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {   
+			if (firstTime) {
+				firstTime=false;
+				benchmarkGravity=currentBlock.Gravity;
+			}else{
+				if (benchmarkGravity != currentBlock.Gravity){
+					aligned=false;
+					break;
+				}
+			}
+		}   
+	}
+	return aligned;
+}
+
+public void setGravToTarget(List<IMyTerminalBlock> blocks, float targetGravity){
+	for (int i=0; i < blocks.Count; i++){
+		IMyGravityGenerator currentBlock = (IMyGravityGenerator)blocks[i];
+		string[] splits = currentBlock.CustomName.Split(':');   
+		if (splits[0] == "Grav Drive") {
+			if (currentBlock.Gravity < targetGravity){
+				currentBlock.GetActionWithName(increaseAction).Apply(currentBlock);
+			}else if (currentBlock.Gravity > targetGravity){
+				currentBlock.GetActionWithName(decreaseAction).Apply(currentBlock);
+			}
+		}   
+	}
+}
+
+public string getLastAction(float currentGravity){
+	string lastAction = "";
+	IMyTextPanel buffer = GridTerminalSystem.GetBlockWithName("scriptBuffer" + memoryBufferNumber) as IMyTextPanel; 
+	string memoryBuffer=buffer.GetPublicText();
+
+	//debug("memoryBuffer: " + memoryBuffer);
+
+	string[] splits = memoryBuffer.Split(delimiter);
+	if (splits.Length > 1) {
+		//debug("Splits length > 1");
+		lastAction = splits[0];
+	}
+
+	if( lastAction == "" ){
+		if (currentGravity >= 0){
+			return increaseAction;
+		}else{
+			return decreaseAction;
+		}
+	}else{
+		return lastAction;
+	}   
+}
+
+public float getTargetGravity(string lastAction, float currentGravity){ 
+	if( lastAction == decreaseAction ){
+		if (currentGravity == lowerGravityLimit){
+debug("1");
+			//saveAction(increaseAction);
+			return upperGravityLimit;
+		}else{
+debug("2");
+			//saveAction(decreaseAction);
+			return lowerGravityLimit;
+		}
+	}else{
+		if (currentGravity == upperGravityLimit){
+debug("3");
+			//saveAction(decreaseAction);
+			return lowerGravityLimit;
+		}else{
+debug("4");
+			//saveAction(increaseAction);
+			return upperGravityLimit;
+		}
+	}
+}
+
+public void saveAction(string action){ 
+	IMyTextPanel buffer = GridTerminalSystem.GetBlockWithName("scriptBuffer" + memoryBufferNumber) as IMyTextPanel; 
+	buffer.WritePublicText(action + delimiter + "\n"); 
+	buffer.WritePublicText(warningMessage,true);  
+}
+  
+void Main()    
+{
+	clearDebugScreen();
+	bool gravitiesAligned=true;
+	float currentGravity=0;
+	float targetGravity = 0;
+
+	List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();  
+	GridTerminalSystem.GetBlocksOfType<IMyGravityGenerator>(blocks);
+
+	gravitiesAligned=checkGravities(blocks);
+	debug("gravitiesAligned: " + gravitiesAligned.ToString());
+
+	if (!gravitiesAligned){
+		targetGravity=1;
+		setGravToTarget(blocks, targetGravity);
+	}else{
+		currentGravity = getcurrentGravity(blocks);
+		debug("currentGravity: " + currentGravity);
+		string lastAction = getLastAction(currentGravity);
+		debug("lastAction: " + lastAction);
+		targetGravity = getTargetGravity(lastAction, currentGravity);
+		debug("targetGravity: " + targetGravity);
+		setGravToTarget(blocks, targetGravity);
+	}
+}
+
+
+
+
+//======================================================
+//======================================================
+//======================================================
+//======================================================
+
+
+//Reset filed dimensions for Grav Drive generators
+//Compiles bt doesn't work - no Main method??
+
+static string debugOutputScreen="Script Output Screen";
+ 
+public void clearOutputScreen(string screenName){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.WritePublicText("");  
+} 
+ 
+public void print(string screenName, string message){  
+	IMyTextPanel screen = GridTerminalSystem.GetBlockWithName(screenName) as IMyTextPanel;  
+	screen.WritePublicText(message + "\n",true);    
+} 
+
+static string cockpitGeneratorName="Gravity Generator: Lower Cockpit";
+static string gravDriveBaseName="Grav Drive: Generator ";
+static string centerGeneratorName=gravDriveBaseName + "C";
+static string[] corners= { "NW", "NE", "SW", "SE" };
+static string[] points= { "N", "E", "S", "W" };
+
+public class CockpitGenerator {
+	float width;
+	float height;
+	float depth;
+	public CockpitGenerator(){
+		width = (float)12.5;
+		height = (float)7.5;
+		depth = (float)22.5;
+	}
+	public float Width{
+		get{
+			return this.width;
+		}
+	}
+	public float Height{
+		get{
+			return this.height;
+		}
+	}
+	public float Depth{
+		get{
+			return this.depth;
+		}
+	}
+}
+
+public class CenterGenerator {
+	float width;
+	float height;
+	float depth;
+	public CenterGenerator(){
+		width = (float)7.5;
+		height = (float)7.5;
+		depth = (float)7.5;
+	}
+	public float Width{
+		get{
+			return this.width;
+		}
+	}
+	public float Height{
+		get{
+			return this.height;
+		}
+	}
+	public float Depth{
+		get{
+			return this.depth;
+		}
+	}
+}
+
+public class PointGenerator {
+	float width;
+	float height;
+	float depth;
+	public PointGenerator(){
+		width = (float)7.5;
+		height = (float)7.5;
+		depth = (float)12.5;
+	}
+	public float Width{
+		get{
+			return this.width;
+		}
+	}
+	public float Height{
+		get{
+			return this.height;
+		}
+	}
+	public float Depth{
+		get{
+			return this.depth;
+		}
+	}
+}
+
+public class CornerGenerator {
+	float width;
+	float height;
+	float depth;
+	public CornerGenerator(){
+		width = (float)12.5;
+		height = (float)7.5;
+		depth = (float)12.5;
+	}
+	public float Width{
+		get{
+			return this.width;
+		}
+	}
+	public float Height{
+		get{
+			return this.height;
+		}
+	}
+	public float Depth{
+		get{
+			return this.depth;
+		}
+	}
+}
+ 
+void Main() 
+{
+	CockpitGenerator cockpitGenerator = new CockpitGenerator();
+	CenterGenerator centerGenerator = new CenterGenerator();
+	PointGenerator pointGenerator = new PointGenerator();
+	CornerGenerator cornerGenerator = new CornerGenerator();
+
+	IMyGravityGenerator gravGen = GridTerminalSystem.GetBlockWithName(cockpitGeneratorName) as IMyGravityGenerator;
+	gravGen.SetValueFloat("Width",cockpitGenerator.Width); 
+	gravGen.SetValueFloat("Height",cockpitGenerator.Height); 
+	gravGen.SetValueFloat("Depth",cockpitGenerator.Depth);
+
+
+}
