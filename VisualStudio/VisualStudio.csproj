@@ -54,6 +54,13 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="grav_drive_toggle_power.cs" />
     <Compile Include="emergency_break.cs" />
+    <Compile Include="reset_grav_gen_fields.cs" />
+    <Compile Include="TextScripts\WorkShop\power-manager-tom.cs" />
+    <Compile Include="TextScripts\WorkShop\3-axis-gravity-drive.cs" />
+    <Compile Include="TextScripts\WorkShop\development-api.cs" />
+    <Compile Include="TextScripts\WorkShop\LCD-upgrades.cs" />
+    <Compile Include="TextScripts\WorkShop\power-management.cs" />
+    <Compile Include="TextScripts\WorkShop\solar_rotor_alignment.cs" />
     <Compile Include="update_info_screen.cs" />
     <Compile Include="template-backup.cs" />
     <Compile Include="template.cs" />
@@ -61,6 +68,7 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

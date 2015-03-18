@@ -32,7 +32,14 @@ namespace SpaceEngineersScripting_EmergencyBreak
                     for (int j = 0; j < batteries.Count; j++)
                     {
                         IMyBatteryBlock battery = batteries[j] as IMyBatteryBlock;
-                        battery.GetActionWithName("Recharge").Apply(battery);
+                        bool recharging = true;
+                        string batteryInfo = battery.DetailedInfo;
+                        recharging = batteryInfo.Contains("recharged");
+                        //if Charging, then switch them to discharge
+                        if (recharging)
+                        {
+                            battery.GetActionWithName("Recharge").Apply(battery);
+                        }
                     }
                 }
             }

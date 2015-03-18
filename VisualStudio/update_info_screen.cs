@@ -19,6 +19,7 @@ namespace SpaceEngineersScripting_UpdateInfoScreen
         //Display Info for Upper Cockpit LCD
 
         static string outputScreen = "LCD Panel: Upper Cockpit: Info";
+        static string solarGroup = "Solar Panels: Borealis";
 
         public void clearOutputScreen(string screenName)
         {
@@ -35,24 +36,26 @@ namespace SpaceEngineersScripting_UpdateInfoScreen
         //Calculate max power output from solar panels on main ship
         void Main()
         {
-            clearOutputScreen(outputScreen);
-            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType<IMySolarPanel>(blocks);
-            int totalPanels = 0;
-            for (int i = 0; i < blocks.Count; i++)
-            {
-                string[] splits = blocks[i].CustomName.Split(':');
+            var solars = new List<IMyTerminalBlock>();
+            var batteries = new List<IMyTerminalBlock>();
+            var reactors = new List<IMyTerminalBlock>();
 
-                //If there is no : in the name (eg: Solar Panel: Skiff)  
-                if (splits.Length == 1)
+            List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
+            for (int i = 0; i < groups.Count; i++)
+            {
+                if (groups[i].Name == solarGroup)
                 {
-                    totalPanels++;
+                    solars = groups[i].Blocks;
                 }
             }
-            double totalPower = Math.Round((((double)totalPanels * 120) / 1000), 2);
 
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType<IMySolarPanel>(blocks);
+
+            double totalPower = Math.Round((((double)solars.Count * 120) / 1000), 2);
+
+            clearOutputScreen(outputScreen);
             //print(outputScreen, totalPanels.ToString() + " Solar Panels | " + String.Format("{0:F2}", totalPower) + "MW max power");
-
             print(outputScreen, " " + String.Format("{0:F2}", totalPower) + "MW power output at full sail");
             print(outputScreen, " 1) Toggle Grav Drive power");
             print(outputScreen, " 2) Toggle Grav Drive direction");
