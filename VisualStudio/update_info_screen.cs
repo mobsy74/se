@@ -37,8 +37,6 @@ namespace SpaceEngineersScripting_UpdateInfoScreen
         void Main()
         {
             var solars = new List<IMyTerminalBlock>();
-            var batteries = new List<IMyTerminalBlock>();
-            var reactors = new List<IMyTerminalBlock>();
 
             List<IMyBlockGroup> groups = GridTerminalSystem.BlockGroups;
             for (int i = 0; i < groups.Count; i++)
