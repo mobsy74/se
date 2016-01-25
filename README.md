@@ -2,6 +2,8 @@
 
 #### Setting up Visual Studio with IntelliSense
 
+http://forum.keenswh.com/threads/guide-setting-up-visual-studio-for-programmable-block-scripting.7225319/
+
 * Download and install VS Community edition
 * Start new project
 * Select Class Library type
@@ -42,4 +44,6 @@ namespace SEScripts_SolarAlignment
 }
 ```
 
-#### Other Stuff
+#### API Reference:
+
+https://steamcommunity.com/sharedfiles/filedetails/?id=360966557
